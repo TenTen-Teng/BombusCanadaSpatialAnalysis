@@ -6,5 +6,139 @@ output: html_notebook
 Data preprocess for Bombus of Canada spatial analysis.
 
 ```{r}
-plot(cars)
+# Load libraries.
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(spatstat)
+library(sp)
+library(sf)
+library(spatstat.geom)
 ```
+
+### Read Bombus occurrence data. 
+```{r}
+# Read occurrence data
+bombus_data <- read_tsv("../data/0008996-250402121839773/occurrence.txt")
+
+# Check data.
+dim(bombus_data)
+```
+
+Filter to entries with coordinates and genus `Bombus`:
+```{r}
+bombus_filtered <- bombus_data %>%
+  filter(!is.na(decimalLatitude), !is.na(decimalLongitude), genus == "Bombus")
+```
+
+Removed `r dim(bombus_data)[1] - dim(bombus_filtered)[1]` records without coordinates and not belong to `Bombus`.
+
+### Read BC Covariates.
+```{r}
+load('../data/BC_Covariates.Rda')
+
+data_covariates <- DATA
+```
+
+### Explore the Covariate Data
+
+```{r}
+sapply(data_covariates, class)
+summary(data_covariates)
+```
+
+### Plot the Window and Image Class Objects
+```{r fig.height=8, fig.width=6}
+
+par(mfrow = c(3,2))
+plot(data_covariates$Window)
+plot(data_covariates$Elevation)
+plot(data_covariates$Forest)
+plot(data_covariates$HFI)
+plot(data_covariates$Dist_Water)
+```
+
+### Filter Bumble Bee in BC Province
+```{r}
+bombus_bc <- subset(bombus_filtered, stateProvince == "British Columbia")
+
+# View(bombus_bc)
+# 3185 223
+dim(bombus_bc)
+
+bumble_bc_percent <- (dim(bombus_bc)[1] / dim(bombus_filtered)[1]) * 100
+print(paste(bumble_bc_percent, "% of bumble bee sightings across Canada occurred in BC."))
+```
+
+There are **`r dim(bombus_bc)[1]`** bumble bee occurrences in BC provinces. We removed `r dim(bombus_filtered)[1] - dim(bombus_bc)[1]` records. 
+
+
+### Plot BC province window
+```{r}
+# Convert the window to an owin object
+sf_obj <- st_as_sf(data_covariates$Window)
+window <- as.owin(sf_obj)
+plot(window, main="BC Province Window")
+```
+
+
+### Plot bombus bc dataset
+```{r}
+# Check dataset columns.
+colnames(bombus_bc)
+```
+
+
+```{r}
+# Convert the cleaned data frame to an sf object
+data_sf <- st_as_sf(bombus_bc, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+# Define the target projection
+projected_args <- "+proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs"
+
+# Transform the coordinates
+bombus_bc_projected <- st_transform(data_sf, crs = projected_args)
+# View(bombus_bc_projected)
+dim(bombus_bc_projected)
+
+# Get coordinations
+bombus_bc_projected_coords <- st_coordinates(bombus_bc_projected)
+head(bombus_bc_projected_coords)
+
+# Convert to ppp object.
+ppp_bombus <- ppp(
+  x = bombus_bc_projected_coords[, "X"],
+  y = bombus_bc_projected_coords[, "Y"],
+  window = window)
+
+# Plot bombus data
+plot(ppp_bombus,  main = 'Bumble Bee in BC Province')
+```
+
+From the above plot warning, we can see there are 62 points outside the BC province window. There are also duplicates in our dataset.
+```{r}
+# Filter out points outside the window
+inside_window <- bombus_bc_projected_coords[, "X"] >= window$xrange[1] & 
+                 bombus_bc_projected_coords[, "X"] <= window$xrange[2] &
+                 bombus_bc_projected_coords[, "Y"] >= window$yrange[1] &
+                 bombus_bc_projected_coords[, "Y"] <= window$yrange[2]
+
+# Convert to ppp object
+ppp_bombus <- ppp(x = bombus_bc_projected_coords[inside_window, "X"],
+                 y = bombus_bc_projected_coords[inside_window, "Y"],
+                 window = window)
+
+# Plot bombus data
+plot(ppp_bombus,  main = 'Bumble Bee in BC Province')
+```
+
+Remove duplicates.
+```{r}
+# Remove duplicates
+ppp_bombus <- ppp_bombus[!duplicated(ppp_bombus), ]
+
+# Plot bombus data - after remove duplicates.
+plot(ppp_bombus,  main = 'Bumble Bee in BC Province')
+```
+
+There are `r (dim(bombus_bc_projected)[1] - ppp_bombus$n)` duplicated points. Now, there are `r ppp_bombus$n` unique bomble bee datapoints left in BC province.
