@@ -1,0 +1,10 @@
+---
+title: "BombusCanadaSpatialAnalysis-Data Preprocess"
+output: html_notebook
+---
+
+Data preprocess for Bombus of Canada spatial analysis.
+
+```{r}
+plot(cars)
+```
