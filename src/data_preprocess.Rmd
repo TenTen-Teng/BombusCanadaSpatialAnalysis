@@ -151,7 +151,6 @@ head(bombus_bc_projected_coords)
 ppp_bombus <- ppp(
   x = bombus_bc_projected_coords[, "X"],
   y = bombus_bc_projected_coords[, "Y"],
-  specificEpithet = bombus_bc_projected$specificEpithet,
   window = window)
 
 # Plot bombus data
