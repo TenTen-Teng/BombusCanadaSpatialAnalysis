@@ -308,7 +308,6 @@ plot(ppp_bombus, add = TRUE, cols = "yellow", pch = 20, cex = 0.3)
 ### Save `ppp_bombus` object
 
 ```{r}
-# Assume your ppp object is named 'pp'
 save(ppp_bombus, file = "../data/ppp_bombus.Rda")
 ```
 
