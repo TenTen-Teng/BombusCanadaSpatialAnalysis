@@ -1,0 +1,313 @@
+---
+title: "BombusCanadaSpatialAnalysis-Data Preprocess"
+output:
+  html_document:
+    df_print: paged
+---
+
+Data preprocess for Bombus of Canada spatial analysis.
+
+```{r}
+# Load libraries.
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(spatstat)
+library(sp)
+library(sf)
+library(spatstat.geom)
+library(RColorBrewer)
+```
+
+## Read dataset
+### 1. Read Bombus occurrence data. 
+```{r}
+# Read occurrence data
+bombus_data <- read_tsv("../data/0008996-250402121839773/occurrence.txt")
+
+# Check data.
+dim(bombus_data)
+```
+
+Filter to entries with coordinates and genus `Bombus`:
+
+```{r}
+bombus_filtered <- bombus_data %>%
+  filter(!is.na(decimalLatitude), !is.na(decimalLongitude), genus == "Bombus")
+```
+
+Removed `r dim(bombus_data)[1] - dim(bombus_filtered)[1]` records without coordinates and not belong to `Bombus`.
+
+Totally, there are `r dim(bombus_filtered)[1]` bombus records. 
+
+Check `specificEpithet`:
+
+> Definition -- Specific Epithet
+>
+> In biological taxonomy, a specific epithet is the second part of the scientific name (binomial name) of a species. It identifies the species within a given genus.
+
+
+```{r}
+unique_specific_epithet_all <- unique(bombus_filtered$specificEpithet)
+```
+
+There are `r length(unique_specific_epithet_all)` specific species in North America.
+
+### 2. Read BC Covariates.
+```{r}
+load('../data/BC_Covariates.Rda')
+
+data_covariates <- DATA
+```
+
+### 3. Read BC Park
+```{r}
+load('../data/BC_Parks.Rda')
+data_parks <- DATA
+
+# Create the parks ppp object
+ppp_parks <- ppp(
+  x = data_parks$Parks$X, 
+  y = data_parks$Parks$Y, 
+  window = as.owin(data_parks$Window))
+
+# Add region information as marks
+marks(ppp_parks) <- data_parks$Parks$Region
+```
+
+## Explore the Covariate Data
+
+```{r}
+sapply(data_covariates, class)
+summary(data_covariates)
+```
+
+### Plot the Window and Image Class Objects
+```{r fig.height=8, fig.width=6}
+
+par(mfrow = c(3,2))
+plot(data_covariates$Window)
+plot(data_covariates$Elevation)
+plot(data_covariates$Forest)
+plot(data_covariates$HFI)
+plot(data_covariates$Dist_Water)
+```
+
+## Filter Bumble Bee in BC Province
+```{r}
+bombus_bc <- subset(bombus_filtered, stateProvince == "British Columbia")
+
+# View(bombus_bc)
+# 3185 223
+dim(bombus_bc)
+
+bumble_bc_percent <- (dim(bombus_bc)[1] / dim(bombus_filtered)[1]) * 100
+print(paste(bumble_bc_percent, "% of bumble bee sightings across Canada occurred in BC."))
+```
+
+There are **`r dim(bombus_bc)[1]`** bumble bee occurrences in BC provinces. We removed `r dim(bombus_filtered)[1] - dim(bombus_bc)[1]` records. 
+
+### Check `specificEpithet`:
+```{r}
+unique_specific_epithet_bc <- unique(bombus_bc$specificEpithet)
+```
+
+There are `r length(unique_specific_epithet_bc)` specific species the province of British Columbia, accounting for `r length(unique_specific_epithet_bc)/length(unique_specific_epithet_all) * 100` % of the total found in North America.
+
+
+### Plot BC province window
+```{r}
+# Convert the window to an owin object
+sf_obj <- st_as_sf(data_covariates$Window)
+window <- as.owin(sf_obj)
+plot(window, main="BC Province Window")
+```
+
+
+### Plot bombus bc dataset
+```{r}
+# Check dataset columns.
+# colnames(bombus_bc)
+```
+
+
+```{r}
+# Convert the cleaned data frame to an sf object
+data_sf <- st_as_sf(bombus_bc, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+# Define the target projection
+projected_args <- "+proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs"
+
+# Transform the coordinates
+bombus_bc_projected <- st_transform(data_sf, crs = projected_args)
+# View(bombus_bc_projected)
+dim(bombus_bc_projected)
+
+# Get coordinations
+bombus_bc_projected_coords <- st_coordinates(bombus_bc_projected)
+head(bombus_bc_projected_coords)
+
+# Convert to ppp object.
+ppp_bombus <- ppp(
+  x = bombus_bc_projected_coords[, "X"],
+  y = bombus_bc_projected_coords[, "Y"],
+  window = window)
+
+# Plot bombus data
+plot(ppp_bombus,  main = 'Bumble Bee in BC Province')
+```
+
+
+### Remove points outside BC province and remove duplicates.
+From the above plot warning, we can see there are 62 points outside the BC province window. There are also duplicates in our dataset.
+
+```{r}
+# Filter out points outside the window
+inside_window <- bombus_bc_projected_coords[, "X"] >= window$xrange[1] & 
+                 bombus_bc_projected_coords[, "X"] <= window$xrange[2] &
+                 bombus_bc_projected_coords[, "Y"] >= window$yrange[1] &
+                 bombus_bc_projected_coords[, "Y"] <= window$yrange[2]
+
+marks_df <- data.frame(
+  specificEpithet = bombus_bc_projected$specificEpithet[inside_window],
+  locality        = bombus_bc_projected$locality[inside_window]
+)
+
+# Convert to ppp object
+ppp_bombus <- ppp(x = bombus_bc_projected_coords[inside_window, "X"],
+                 y = bombus_bc_projected_coords[inside_window, "Y"],
+                 marks  = marks_df,
+                 window = window)
+```
+
+Remove duplicates.
+```{r}
+# Remove duplicates
+ppp_bombus <- ppp_bombus[!duplicated(ppp_bombus), ]
+```
+
+There are `r (dim(bombus_bc_projected)[1] - ppp_bombus$n)` duplicated points. Now, there are `r ppp_bombus$n` unique bomble bee datapoints left in BC province.
+
+### Plot Specific Epithet vs. Bumble Bee Occurrences
+```{r}
+# Extract levels and number of classes
+epithet_levels <- unique(marks(ppp_bombus)$specificEpithet)
+n_classes <- length(epithet_levels)
+
+# Define color palette
+colors <- colorRampPalette(brewer.pal(12, "Set3"))(n_classes)
+
+# Define shape values (repeats if n_classes > 26)
+all_shapes <- 0:25
+shape_values <- rep(all_shapes, length.out = n_classes)
+
+# Plot
+plot(ppp_bombus,
+     which.marks = "specificEpithet",
+     main        = "Point Pattern of Specific Epithet and Bumble Bee Occurrences",
+     cols         = colors,
+     pch         = shape_values,
+     cex         = 0.8,
+     legend      = FALSE
+)
+
+# Add a custom legend
+legend(
+  "topright", 
+  legend = epithet_levels, 
+  col    = colors, 
+  pch    = shape_values, 
+  cex    = 0.6, 
+  ncol   = 2
+)
+```
+
+### Add marks
+Add `Distance`, `Dist Water`, `Elevation`, `Forest`, and `HFI` for marks.
+
+```{r}
+length_max <- length(dist)
+
+# Distance -- 984 data points, no missing records.
+dist <- nndist(ppp_bombus)
+
+# Dist Water -- 984 data points, no missing records.
+dist_water <- data_covariates$Dist_Water[ppp_bombus]
+
+# Elevation -- 982 data points, 2 missing records, replace with NA.
+elev <- data_covariates$Elevation[ppp_bombus]
+length(elev) <- length_max
+
+# Forest -- 963 data points, 19 missing points, replace with NA.
+forest <- data_covariates$Forest[ppp_bombus]
+length(forest) <- length_max
+
+# HFI -- 950 data points, 34 missing points, replace with NA.
+hfi_bombus <- data_covariates$HFI[ppp_bombus]
+length(hfi_bombus) <- length_max
+
+# Add marks.
+marks(ppp_bombus)$Dist <- dist
+marks(ppp_bombus)$DistWater <- dist_water
+marks(ppp_bombus)$Elevation <- elev
+marks(ppp_bombus)$Forest <- forest
+marks(ppp_bombus)$HFI <- hfi_bombus
+
+head(marks(ppp_bombus))
+```
+Plot
+```{r}
+# Plot distance mark.
+plot(ppp_bombus, which.marks = "Dist", main = "Bomble Bee Distance")
+
+# Plot dist water
+plot(ppp_bombus, which.marks = "DistWater", main = "Dist Water")
+
+# Plot elevation
+ppp_bombus_elev_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$Elevation))
+marks(ppp_bombus_elev_clean)$ElevationCut <- cut(marks(ppp_bombus_elev_clean)$Elevation, breaks = 4)
+plot(ppp_bombus_elev_clean, which.marks = "ElevationCut", main = "Elevation")
+
+# Plot Forest
+ppp_bombus_forest_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$Forest))
+plot(ppp_bombus_forest_clean, which.marks = "Forest", main = "Forest")
+
+# Plot HFI
+ppp_bombus_hfi_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$HFI))
+plot(ppp_bombus_hfi_clean, which.marks = "HFI", main = "HFI")
+```
+
+## Park
+Plot Park vs. Bumble bee occurrences.
+```{r}
+# Plot the point pattern & assign to variable for specific information
+ppp_parks_plot <- plot(ppp_parks,
+                       main = "Point Pattern of Parks and Bumble Bee Occurrences", 
+                       col = "grey90", 
+                       cols = brewer.pal(n = 5, name = "Set2"), 
+                       pch = c(15, 19, 18, 17, 20), 
+                       cex = 0.8, 
+                       legend = FALSE
+)
+
+# Add a custom legend with a title 'Region'
+legend("topright", 
+       legend = c("North", "Ok", "South", "Tc", "West", "Bumble Bee"), 
+       title = "Marks", 
+       col = c(brewer.pal(n = 5, name = "Set2"), "yellow"), 
+       pch = c(15, 19, 18, 17, 16, 20), 
+       cex = 0.8
+)
+
+# Plot the bumble bee data points
+plot(ppp_bombus, add = TRUE, cols = "black", pch = 20, cex = 0.6)
+plot(ppp_bombus, add = TRUE, cols = "yellow", pch = 20, cex = 0.3)
+```
+
+### Save `ppp_bombus` object
+
+```{r}
+save(ppp_bombus, file = "../data/ppp_bombus.Rda")
+```
+
+
