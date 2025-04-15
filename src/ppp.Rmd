@@ -5,7 +5,7 @@ output:
     df_print: paged
 ---
 
-Data preprocess for Bombus of Canada spatial analysis.
+Poisson Point Process Models for Bombus of Canada spatial analysis.
 
 ```{r}
 # Load libraries.
