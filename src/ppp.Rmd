@@ -308,3 +308,7 @@ plot(res2, cols = "transparent", main = "Residual Plot of Improved Model", zlim 
 
 The improved model has lower residuals in some areas.
 
+
+
+
+
