@@ -188,6 +188,10 @@ ppp_bombus <- ppp_bombus[!duplicated(ppp_bombus), ]
 
 There are `r (dim(bombus_bc_projected)[1] - ppp_bombus$n)` duplicated points. Now, there are `r ppp_bombus$n` unique bomble bee datapoints left in BC province.
 
+```{r}
+plot(unmark(ppp_bombus), main = "Bumble Bee Occurrences in BC")
+```
+
 ### Plot Specific Epithet vs. Bumble Bee Occurrences
 ```{r}
 # Extract levels and number of classes
@@ -204,7 +208,7 @@ shape_values <- rep(all_shapes, length.out = n_classes)
 # Plot
 plot(ppp_bombus,
      which.marks = "specificEpithet",
-     main        = "Point Pattern of Specific Epithet and Bumble Bee Occurrences",
+     main        = "Specific Epithet of Bumble Bee in BC",
      cols         = colors,
      pch         = shape_values,
      cex         = 0.8,
@@ -282,7 +286,7 @@ Plot Park vs. Bumble bee occurrences.
 ```{r}
 # Plot the point pattern & assign to variable for specific information
 ppp_parks_plot <- plot(ppp_parks,
-                       main = "Point Pattern of Parks and Bumble Bee Occurrences", 
+                       main = "Parks VS. Bumble Bee Occurrences", 
                        col = "grey90", 
                        cols = brewer.pal(n = 5, name = "Set2"), 
                        pch = c(15, 19, 18, 17, 20), 
