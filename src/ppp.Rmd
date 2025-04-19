@@ -1,0 +1,314 @@
+---
+title: "BombusCanadaSpatialAnalysis-Poisson Point Process Models"
+output:
+  html_document:
+    df_print: paged
+---
+
+Poisson Point Process Models for Bombus of Canada spatial analysis.
+
+```{r}
+# Load libraries.
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(spatstat)
+library(sp)
+library(sf)
+library(spatstat.geom)
+library(RColorBrewer)
+```
+
+## Read dataset
+```{r}
+# Read ppp data
+load('../data/ppp_bombus.Rda')
+
+load('../data/BC_Covariates.Rda')
+data_covariates <- DATA
+
+load('../data/BC_Parks.Rda')
+data_parks <- DATA
+```
+
+### Check for collinearity between covariates
+```{r}
+# Check for collinearity
+cor_matrix_covariates <- cor.im(Elevation = data_covariates$Elevation, Forest = data_covariates$Forest, HFI = data_covariates$HFI, Dist_water = data_covariates$Dist_Water, use = "pairwise.complete.obs") # 
+cor_matrix_covariates
+```
+
+```{r}
+library(corrplot)
+
+# Plot the correlation matrix using corrplot with values overlayed
+cor_plot <- corrplot(cor_matrix_covariates, method = "number", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45) 
+```
+
+### Fit a null model (intercept only)
+```{r}
+# Fit a null model
+ppp_unmarked <- unmark(ppp_bombus)
+fit_null <- ppm(ppp_unmarked ~ 1)
+fit_null
+```
+
+### Fit a linear model
+```{r}
+# Iterate over each element in data_covariates
+for (i in seq_along(data_covariates)) {
+  # Check if the element is of class 'im'
+  if (inherits(data_covariates[[i]], "im")) {
+    # Replace NA and NaN values with zeros
+    data_covariates[[i]]$v[is.na(data_covariates[[i]]$v) | is.nan(data_covariates[[i]]$v)] <- 0
+  }
+}
+
+# Fit a linear model
+fit_linear <- ppm(ppp_unmarked ~ Elevation + Forest + HFI + Dist_Water, data = data_covariates)
+fit_linear
+```
+
+### # Fit the PPP model with squared terms
+```{r}
+# Fit the PPP model with squared terms
+fit <- ppm(ppp_unmarked ~ Elevation + I(Elevation^2) + Forest + HFI + I(HFI^2) + Dist_Water, data = data_covariates)
+fit
+```
+
+Adding squared terms of Forest and Dist_Water will lead to error.
+
+### Model Comparison
+```{r}
+# AIC values
+cat("Null model AIC:", AIC(fit_null), "\n")
+cat("Linear model AIC:", AIC(fit_linear), "\n")
+cat("Full model AIC:", AIC(fit), "\n")
+```
+
+Full Model has the lowest AIC value of 40387.41.
+
+### Likelihood ratio test
+```{r}
+# Likelihood ratio test comparing null model and linear model
+anova(fit_null, fit_linear, test = "LRT")
+```
+
+The linear model is better than the null model.
+
+```{r}
+# Likelihood ratio test comparing linear model and full model
+anova(fit_linear, fit, test = "LRT")
+```
+
+The full model is better than the linear model.
+
+### Visualize the fitted model
+```{r}
+# visualize the fitted model
+plot(fit,
+     se = FALSE,
+     superimpose = FALSE,
+     main = "Fitted Model")
+
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.5,
+     cols = "white",
+     add = TRUE)
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.3,
+     cols = "black",
+     add = TRUE)
+```
+
+### Plot the effects of the individual coefficients
+```{r}
+# Median forest
+median_forest <- median(data_covariates$Forest)
+
+# Median elevation
+median_elev <- median(data_covariates$Elevation)
+
+# Median HFI
+median_HFI <- median(data_covariates$HFI)
+
+# Median Dist_Water
+median_dist_water <- median(data_covariates$Dist_Water)
+
+## Forest effect
+forest_effect <- effectfun(fit, "Forest", Elevation = median_elev, HFI = median_HFI, Dist_Water = median_dist_water, se.fit = T)
+
+## Elevation effect
+elev_effect <- effectfun(fit, "Elevation", Forest = median_forest, HFI = median_HFI, Dist_Water = median_dist_water, se.fit = T)
+
+## HFI effect
+HFI_effect <- effectfun(fit, "HFI", Dist_Water = median_dist_water, Elevation = median_elev, Forest = median_forest, se.fit = T)
+
+# Dist_Water effect
+dist_water_effect <- effectfun(fit, "Dist_Water", HFI = median_HFI, Elevation = median_elev, Forest = median_forest, se.fit = T)
+
+# Plotting
+par(mfrow = c(2,2))
+
+# Plot the elevation effect 
+plot(elev_effect,
+     legend = FALSE,
+     main = "Effect of Elevation")
+
+# Plot the forest effect 
+plot(forest_effect,
+     legend = FALSE,
+     main = "Effect of Forest")
+
+# Plot the Dist_Water effect
+plot(dist_water_effect,
+     legend = FALSE,
+     main = "Effect of Dist_Water")
+
+# Plot the HFI effect
+plot(HFI_effect,
+     legend = FALSE,
+     main = "Effect of HFI")
+```
+
+### Quadrat test
+```{r}
+# Quadrat test
+quadrat.test(fit, nx=4, ny=2)
+```
+The small p value tells us that there’s a significant deviation from our model’s predictions.
+
+### Calculate and plot the model residuals
+```{r}
+# calculate the residuals
+res <- residuals(fit)
+
+# visualize
+plot(res, cols = "transparent", main = "Residual Plot of Full Model")
+```
+
+### Calculate the partial residuals
+```{r}
+# Calculate the partial residuals as a function of elevation
+par_res_elev <- parres(fit, "Elevation")
+
+# Calculate the relative intensity as a function of forest
+par_res_forest <- parres(fit, "Forest")
+
+# Calculate the partial residuals as a function of HFI
+par_res_HFI <- parres(fit, "HFI")
+
+# Calculate the relative intensity as a function of Dist_Water
+par_res_dist_water <- parres(fit, "Dist_Water")
+
+# Plotting
+par(mfrow = c(2,2))
+plot(par_res_elev,
+     main = "",
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Level of Elevation (m)")
+plot(par_res_forest,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Percentage of Forest Coverage")
+plot(par_res_HFI,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Human Footprint Index (HFI)")
+plot(par_res_dist_water,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Distance from Water (m)")
+```
+
+### Try to improve model
+```{r}
+# add interaction terms
+fit2 <- ppm(ppp_unmarked ~ Elevation * Forest + Elevation * HFI + HFI * Dist_Water + I(Elevation^2) + I(HFI^2), data = data_covariates)
+fit2
+```
+
+### Model Comparison
+```{r}
+# AIC
+AIC(fit)
+AIC(fit2)
+```
+
+The interaction model is better than the original one.
+
+```{r}
+# Likelihood ratio test
+anova(fit, fit2, test = "LRT")
+```
+
+The interaction model is better than the original one.
+
+### Visualize and compare the models
+```{r}
+# visualize the fitted model
+par(mfrow = c(1,2))
+plot(fit,
+     se = FALSE,
+     superimpose = FALSE,
+     main = "Fitted Model without Interaction")
+
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.5,
+     cols = "white",
+     add = TRUE)
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.3,
+     cols = "black",
+     add = TRUE)
+
+plot(fit2,
+     se = FALSE,
+     superimpose = FALSE,
+     main = "Fitted Model with Interaction")
+
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.5,
+     cols = "white",
+     add = TRUE)
+plot(ppp_unmarked,
+     pch = 16,
+     cex = 0.3,
+     cols = "black",
+     add = TRUE)
+```
+
+### Quadrat test
+```{r}
+# Quadrat test
+quadrat.test(fit2, nx=4, ny=3)
+```
+The small p value tells us that there’s a significant deviation from our model’s predictions.
+
+### Calculate and plot the model residuals
+```{r}
+# calculate the residuals
+res2 <- residuals(fit2)
+
+# visualize
+par(mfrow = c(1,2))
+plot(res, cols = "transparent", main = "Residual Plot of Full Model", zlim = c(-5e-8, 0))
+plot(res2, cols = "transparent", main = "Residual Plot of Improved Model", zlim = c(-5e-8, 0))
+```
+
+The improved model has lower residuals in some areas.
+
+
+
+
+

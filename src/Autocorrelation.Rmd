@@ -1,0 +1,464 @@
+---
+title: "BombusCanadaSpatialAnalysis-Poisson Point Process Models"
+output:
+  html_document:
+    df_print: paged
+---
+
+Poisson Point Process Models for Bombus of Canada spatial analysis.
+
+```{r}
+# Load libraries.
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(spatstat)
+library(sp)
+library(sf)
+library(spatstat.geom)
+library(RColorBrewer)
+library(gstat)
+```
+
+
+## Read dataset
+```{r}
+# Read ppp data
+load('../data/ppp_bombus.Rda')
+
+load('../data/BC_Covariates.Rda')
+data_covariates <- DATA
+
+load('../data/BC_Parks.Rda')
+data_parks <- DATA
+
+Dist_water = data_covariates$Dist_Water
+Dist = data_covariates$Dist
+Forest = data_covariates$Forest
+Elevation = data_covariates$Elevation
+HFI = data_covariates$HFI
+```
+
+### Detecting Spatial Autocorrelation with Moran'I
+
+```{r}
+# extract coordinates matrix
+coords = cbind(ppp_bombus$x, ppp_bombus$y)
+
+# calculate distance-based weight matrix
+w = fields::rdist(coords)
+
+print("spatial autocorrelation (Moran's I) for variable 'Dist'")
+ape::Moran.I(ppp_bombus$marks$Dist, w=w)
+print("spatial autocorrelation (Moran's I) for variable 'DistWater'")
+ape::Moran.I(ppp_bombus$marks$DistWater, w=w)
+```
+
+### Fitting correlation models
+#### Forest
+
+
+```{r}
+fore_values <- lookup.im(Forest, ppp_bombus$x, ppp_bombus$y)
+fore_values[is.na(fore_values)] <- 0
+df_fore <- data.frame(Z_s = fore_values, 
+                   x = ppp_bombus$x,
+                   y = ppp_bombus$y)
+ggplot(df_fore, aes(x = x, y = y)) +
+  geom_point(aes(color = Z_s, size = Z_s)) +  
+  scale_color_gradient(low = "skyblue", high = "yellow") +      
+  scale_size_continuous(range = c(1, 3)) +               
+  labs(
+    title = "Forest Cover at Bombus Locations",
+    x = "X-coordinate", 
+    y = "Y-coordinate",
+    color = "Forest Value", 
+    size = "Forest Value"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Variogram for Forest
+sp::coordinates(df_fore) <- c("x","y")
+vg <- gstat::variogram(Z_s ~ 1, data = df_fore)
+plot(vg)
+```
+
+```{r}
+# fit linear model
+fit.linear <- gstat::fit.variogram(vg, model = gstat::vgm("Lin"))
+fit.linear
+plot(vg, 
+     model = fit.linear,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit spherical model
+fit.sph <- gstat::fit.variogram(vg, model = gstat::vgm("Sph"))
+fit.sph
+plot(vg, 
+     model = fit.sph,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit Gaussian model
+fit.gau <- gstat::fit.variogram(vg, model = gstat::vgm("Gau"))
+fit.gau
+plot(vg, 
+     model = fit.gau,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit exp model
+fit.exp <- gstat::fit.variogram(vg, model = gstat::vgm("Exp"))
+fit.exp
+plot(vg, 
+     model = fit.exp,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit nuggest only model
+fit.nug <- gstat::fit.variogram(vg, model = gstat::vgm("Nug"))
+fit.nug
+plot(vg, 
+     model = fit.nug,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+
+```
+
+```{r}
+# sse for Forest
+results <- data.frame(model = c("spherical", "linear", "Gaussian", "exponential", "nugget"),
+                      SSErr = c(attr(fit.sph , "SSErr"),
+                                attr(fit.linear , "SSErr"), 
+                                attr(fit.gau , "SSErr"), 
+                                attr(fit.exp , "SSErr"),
+                                attr(fit.nug, "SSErr")))
+results <- results[order(results$SSErr),]
+results
+```
+
+```{r}
+# compare variance
+fit.linear$psill[2] + fit.linear$psill[1]
+var(fore_values)
+
+# fitted values
+fitted <- variogramLine(fit.linear,
+                        maxdist = max(vg$dist),
+                        dist_vector = vg$dist)
+
+residuals <- fitted$gamma - vg$gamma
+plot(residuals - fitted$gamma)
+
+```
+
+
+#### Elevation
+```{r}
+elev_values <- lookup.im(Elevation, ppp_bombus$x, ppp_bombus$y)
+elev_values[is.na(elev_values)] <- 0
+df_elev <- data.frame(Z_s = elev_values, 
+                   x = ppp_bombus$x,
+                   y = ppp_bombus$y)
+ggplot(df_elev, aes(x = x, y = y)) +
+  geom_point(aes(color = Z_s, size = Z_s)) +  
+  scale_color_gradient(low = "skyblue", high = "yellow") +      
+  scale_size_continuous(range = c(1, 3)) +               
+  labs(
+    title = "Elevation at Bombus Locations",
+    x = "X-coordinate", 
+    y = "Y-coordinate",
+    color = "Elevation Value", 
+    size = "Elevation Value"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Variogram for Elevation
+sp::coordinates(df_elev) <- c("x","y")
+vg <- gstat::variogram(Z_s ~ 1, data = df_elev)
+plot(vg)
+```
+```{r}
+# fit linear model
+fit.linear <- gstat::fit.variogram(vg, model = gstat::vgm("Lin"))
+fit.linear
+plot(vg, 
+     model = fit.linear,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit spherical model
+fit.sph <- gstat::fit.variogram(vg, model = gstat::vgm("Sph"))
+fit.sph
+plot(vg, 
+     model = fit.sph,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit Gaussian model
+fit.gau <- gstat::fit.variogram(vg, model = gstat::vgm("Gau"))
+fit.gau
+plot(vg, 
+     model = fit.gau,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit exp model
+fit.exp <- gstat::fit.variogram(vg, model = gstat::vgm("Exp"))
+fit.exp
+plot(vg, 
+     model = fit.exp,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit nuggest only model
+fit.nug <- gstat::fit.variogram(vg, model = gstat::vgm("Nug"))
+fit.nug
+plot(vg, 
+     model = fit.nug,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+
+```
+
+```{r}
+# sse for Elevation
+results <- data.frame(model = c("spherical", "linear", "Gaussian", "exponential", "nugget"),
+                      SSErr = c(attr(fit.sph , "SSErr"),
+                                attr(fit.linear , "SSErr"), 
+                                attr(fit.gau , "SSErr"), 
+                                attr(fit.exp , "SSErr"),
+                                attr(fit.nug, "SSErr")))
+results <- results[order(results$SSErr),]
+results
+```
+```{r}
+fit.exp$psill[2] + fit.exp$psill[1]
+var(elev_values)
+fitted <- variogramLine(fit.exp,
+                        maxdist = max(vg$dist),
+                        dist_vector = vg$dist)
+
+residuals <- fitted$gamma - vg$gamma
+plot(residuals - fitted$gamma)
+```
+
+#### HFI
+
+```{r}
+hfi_values <- lookup.im(HFI, ppp_bombus$x, ppp_bombus$y)
+hfi_values[is.na(hfi_values)] <- 0
+df_hfi <- data.frame(Z_s = hfi_values, 
+                   x = ppp_bombus$x,
+                   y = ppp_bombus$y)
+
+ggplot(df_hfi, aes(x = x, y = y)) +
+  geom_point(aes(color = Z_s, size = Z_s)) +  
+  scale_color_gradient(low = "skyblue", high = "yellow") +      
+  scale_size_continuous(range = c(1, 3)) +               
+  labs(
+    title = "HFI Cover at Bombus Locations",
+    x = "X-coordinate", 
+    y = "Y-coordinate",
+    color = "HFI Value", 
+    size = "HFI Value"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Variogram for HFI
+sp::coordinates(df_hfi) <- c("x","y")
+vg <- gstat::variogram(Z_s ~ 1, data = df_hfi)
+plot(vg)
+```
+
+```{r}
+# fit linear model
+fit.linear <- gstat::fit.variogram(vg, model = gstat::vgm("Lin"))
+fit.linear
+plot(vg, 
+     model = fit.linear,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit spherical model
+fit.sph <- gstat::fit.variogram(vg, model = gstat::vgm("Sph"))
+fit.sph
+plot(vg, 
+     model = fit.sph,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit Gaussian model
+fit.gau <- gstat::fit.variogram(vg, model = gstat::vgm("Gau"))
+fit.gau
+plot(vg, 
+     model = fit.gau,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit exp model
+fit.exp <- gstat::fit.variogram(vg, model = gstat::vgm("Exp"))
+fit.exp
+plot(vg, 
+     model = fit.exp,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit nuggest only model
+fit.nug <- gstat::fit.variogram(vg, model = gstat::vgm("Nug"))
+fit.nug
+plot(vg, 
+     model = fit.nug,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+```
+```{r}
+# sse for HFI
+results <- data.frame(model = c("spherical", "linear", "Gaussian", "exponential", "nugget"),
+                      SSErr = c(attr(fit.sph , "SSErr"),
+                                attr(fit.linear , "SSErr"), 
+                                attr(fit.gau , "SSErr"), 
+                                attr(fit.exp , "SSErr"),
+                                attr(fit.nug, "SSErr")))
+results <- results[order(results$SSErr),]
+results
+```
+```{r}
+fit.sph$psill[2] + fit.sph$psill[1]
+var(hfi_values)
+
+# fitted values
+fitted <- variogramLine(fit.sph,
+                        maxdist = max(vg$dist),
+                        dist_vector = vg$dist)
+
+residuals <- fitted$gamma - vg$gamma
+plot(residuals - fitted$gamma)
+```
+
+#### DistWater
+
+```{r}
+distwater_values <- lookup.im(Dist_water, ppp_bombus$x, ppp_bombus$y)
+distwater_values[is.na(distwater_values)] <- 0
+df_dw <- data.frame(Z_s = distwater_values, 
+                   x = ppp_bombus$x,
+                   y = ppp_bombus$y)
+
+ggplot(df_dw, aes(x = x, y = y)) +
+  geom_point(aes(color = Z_s, size = Z_s)) +  
+  scale_color_gradient(low = "skyblue", high = "yellow") +      
+  scale_size_continuous(range = c(1, 3)) +               
+  labs(
+    title = "Dist Water at Bombus Locations",
+    x = "X-coordinate", 
+    y = "Y-coordinate",
+    color = "Dist Water Value", 
+    size = "Dist Water Value"
+  ) +
+  theme_minimal()
+```
+```{r}
+# Variogram for Forest
+sp::coordinates(df_dw) <- c("x","y")
+vg <- gstat::variogram(Z_s ~ 1, data = df_dw)
+plot(vg)
+```
+
+```{r}
+# fit linear model
+fit.linear <- gstat::fit.variogram(vg, model = gstat::vgm("Lin"))
+fit.linear
+plot(vg, 
+     model = fit.linear,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit spherical model
+fit.sph <- gstat::fit.variogram(vg, model = gstat::vgm("Sph"))
+fit.sph
+plot(vg, 
+     model = fit.sph,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit Gaussian model
+fit.gau <- gstat::fit.variogram(vg, model = gstat::vgm("Gau"))
+fit.gau
+plot(vg, 
+     model = fit.gau,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit exp model
+fit.exp <- gstat::fit.variogram(vg, model = gstat::vgm("Exp"))
+fit.exp
+plot(vg, 
+     model = fit.exp,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+
+# fit nuggest only model
+fit.nug <- gstat::fit.variogram(vg, model = gstat::vgm("Nug"))
+fit.nug
+plot(vg, 
+     model = fit.nug,
+     main="",
+     xlab = "Distance (m)", 
+     ylab = "Semi - variance")
+```
+```{r}
+# sse for Forest
+results <- data.frame(model = c("spherical", "linear", "Gaussian", "exponential", "nugget"),
+                      SSErr = c(attr(fit.sph , "SSErr"),
+                                attr(fit.linear , "SSErr"), 
+                                attr(fit.gau , "SSErr"), 
+                                attr(fit.exp , "SSErr"),
+                                attr(fit.nug, "SSErr")))
+results <- results[order(results$SSErr),]
+results
+```
+
+```{r}
+# compare variance
+fit.linear$psill[2] + fit.linear$psill[1]
+var(distwater_values)
+
+# fitted values
+fitted <- variogramLine(fit.linear,
+                        maxdist = max(vg$dist),
+                        dist_vector = vg$dist)
+
+residuals <- fitted$gamma - vg$gamma
+plot(residuals - fitted$gamma)
+```
+
+
