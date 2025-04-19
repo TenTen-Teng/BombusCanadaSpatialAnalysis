@@ -1,0 +1,239 @@
+---
+title: "BombusCanadaSpatialAnalysis - Spatial Intensity & Spatial Correlations"
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Load Libraries
+
+```{r, warning=FALSE}
+# Load libraries
+library(spatstat)
+library(spatstat.geom)
+library(spatstat.explore)
+library(viridis)
+library(RColorBrewer)
+```
+
+#### Load Data
+
+```{r}
+# Load data
+load("../data/ppp_bombus.Rda")
+load("../data/BC_Covariates.Rda")
+data_covariates <- DATA
+```
+
+### I. Spatial Intensity (First-order Properties)
+
+#### Homogeneous Intensity Estimate
+
+```{r}
+# Rescale to km²
+ppp_bombus_km <- rescale(ppp_bombus, 1000, "km")
+intensity(ppp_bombus_km)
+```
+
+The estimated intensity (\~0.00104 parks per km²) confirms that Bombus observations are sparse and infrequent across BC, providing a useful baseline for comparison.
+
+#### Quadrat Counting and Intensity Map
+
+```{r}
+Q <- quadratcount(ppp_bombus, nx = 6, ny = 6)
+
+# Visualize quadrats
+plot(ppp_bombus, pch = 16, main = "Quadrat Count Overlay", use.marks = FALSE)
+plot(Q, add = TRUE, col = "red")
+
+# Intensity per quadrat
+intensity(Q)
+```
+
+The quadrat map reveals strong spatial heterogeneity: some grid cells are densely populated while others are completely empty. This visual evidence contradicts spatial uniformity.
+
+#### Quadrat Test for Complete Spatial Randomness
+
+```{r, warning=FALSE}
+quadrat.test(ppp_bombus, nx = 6, ny = 6)
+```
+
+The test yields an extremely small p-value (p \< 2.2e-16), statistically rejecting CSR. This supports the existence of spatial clustering.
+
+#### Kernel Density Estimation
+
+```{r}
+lambda_kde <- density(ppp_bombus)
+
+plot(lambda_kde, main = "Kernel Estimate of λ(u)")
+plot(ppp_bombus, add = TRUE, pch = 16, cex = 0.3, use.marks = FALSE)
+```
+
+Kernel smoothing shows that Bombus records are concentrated in the southwest and southeast. Northern BC remains largely empty, indicating regional intensity bias.
+
+#### Bandwidth Sensitivity Comparison
+
+```{r}
+par(mfrow = c(1,1))
+plot(density(ppp_bombus, sigma = bw.diggle), main = "Bandwidth = bw.diggle")
+plot(density(ppp_bombus, sigma = bw.ppl), main = "Bandwidth = bw.ppl")
+```
+
+Using different bandwidths changes the degree of smoothing, but hotspot patterns remain stable, confirming the robustness of detected spatial trends.
+
+#### Hotspot Detection (Scan Test)
+
+```{r}
+R <- bw.ppl(ppp_bombus)
+LR <- scanLRTS(ppp_bombus, r = R)
+
+plot(LR, main = "ScanLRTS: Hotspot Detection")
+
+pvals <- eval.im(pchisq(LR, df = 1, lower.tail = FALSE))
+plot(pvals, main = "Local p-values (Hotspots)")
+```
+
+Significant hotspots are detected in southern BC. The scan test identifies localized clusters where observed intensity exceeds simulated randomness.
+
+#### Covariate Relationship – Elevation
+
+```{r}
+rho_elev <- rhohat(unmark(ppp_bombus), data_covariates$Elevation)
+plot(rho_elev, main = "ρ̂(Elevation)")
+```
+
+Intensity increases up to around 1200m, then slightly declines. This unimodal trend suggests a preference for mid-elevation zones.
+
+#### Covariate Relationship – Forest Cover
+
+```{r}
+ppp_unmarked <- unmark(ppp_bombus)
+rho_forest <- rhohat(ppp_unmarked, data_covariates$Forest)
+plot(rho_forest, main = "ρ̂(Forest Cover)")
+```
+
+Bombus intensity is highest in areas with \~40–60% forest cover, revealing a nonlinear association where moderate forest density is preferred.
+
+#### Elevation Binning + Histogram Overlay
+
+```{r}
+elev <- data_covariates$Elevation
+
+hist(elev, col = rgb(0, 0, 1, 0.3), main = "Elevation Histogram Overlay")
+hist(elev[ppp_bombus], col = rgb(1, 0, 0, 0.5), add = TRUE)
+legend("topright", legend = c("Whole Window", "Bombus Locations"),
+       fill = c(rgb(0, 0, 1, 0.3), rgb(1, 0, 0, 0.5)))
+```
+
+```{r, warning=FALSE}
+# Convert elevation image to full vector
+elev_full <- as.vector(data_covariates$Elevation$v)
+
+# Extract elevation values at Bombus locations, removing any NAs
+elev_bombus <- lookup.im(data_covariates$Elevation, ppp_bombus)
+elev_bombus <- elev_bombus[!is.na(elev_bombus)]
+
+# Define common bin breaks for comparison
+common_breaks <- seq(-200, 3600, by = 200)
+
+# Plot elevation distribution for the whole window
+hist(elev_full, col = rgb(0, 0, 1, 0.4), breaks = common_breaks,
+     main = "Elevation Distribution (Whole Window)", xlab = "Elevation (m)")
+
+# Plot elevation distribution at Bombus locations
+hist(elev_bombus, col = rgb(1, 0, 0, 0.4), breaks = common_breaks,
+     main = "Elevation Distribution (Bombus Locations)", xlab = "Elevation (m)")
+```
+
+To assess elevation preferences, we first overlaid histograms. However, due to scale mismatch, separate histograms using common breaks were plotted. These show Bombus prefer 500–1500m elevation, unlike the full window which peaks higher.
+
+#### Intensity Section Summary:
+
+Bombus distribution across BC is not uniform. The point pattern shows clear southern clustering, with preferences for mid-elevation and moderate forest cover. These findings reject the assumption of CSR and justify intensity-based modeling using covariates.
+
+### II. Spatial Correlations (Second-order Properties)
+
+#### Morisita’s Index
+
+```{r}
+sub_win <- as.owin(c(300000, 800000, 500000, 1200000))
+ppp_crop <- ppp_bombus[sub_win]
+miplot(ppp_crop, ylim = c(0, 5), main = "Morisita's Index (Cropped Window)")
+```
+
+Due to the irregular shape of the observation window, we computed Morisita’s Index using a cropped rectangular subset. Despite evaluating only two distance bands, the index is consistently above 1, suggesting moderate clustering. It supports other correlation-based findings as a supplementary indicator.
+
+#### Ripley’s K-function (Homogeneous)
+
+```{r}
+E_K <- envelope(ppp_bombus, Kest, nsim = 99, correction = "border", fix.n = TRUE)
+plot(E_K, main = "Ripley's K-function with CSR Envelope", legendargs = list(cex = 0.7))
+```
+
+The empirical K function lies above the CSR envelope, showing that Bombus locations are more clustered than expected under randomness across multiple distance scales.
+
+#### Ripley’s K-function (Inhomogeneous)
+
+```{r}
+lambda_bombus <- density(ppp_bombus, sigma = bw.ppl, positive = TRUE)
+
+K_inhom <- envelope(ppp_bombus, Kinhom,
+                    simulate = expression(rpoispp(lambda_bombus)),
+                    nsim = 99, correction = "border")
+
+plot(K_inhom, main = "Inhomogeneous Ripley’s K-function", legendargs = list(cex = 0.7))
+```
+
+Even after accounting for intensity variations, the Kinhom function exceeds expectation, confirming clustering that cannot be explained by first-order intensity alone.
+
+#### Pair Correlation Function (Homogeneous)
+
+```{r, error=FALSE}
+ppp_unmarked <- unmark(ppp_bombus)
+
+r_vals <- seq(0, 100000, length.out = 128)
+
+g_homo <- envelope(
+  ppp_unmarked,
+  fun = function(X, r, ...) pcf(X, r = r, ...),
+  r = r_vals,
+  nsim = 99,
+  fix.n = TRUE
+)
+
+plot(g_homo, 
+     main = "Pair Correlation Function (Homogeneous, r ≤ 100km)", 
+     legendargs = list(cex = 0.7), 
+     legendpos = "topright")
+```
+
+g(r) \> 1 for r \< 30km indicates strong local clustering. At larger distances, the function approaches 1, consistent with weak or no correlation.
+
+#### Pair Correlation Function (Inhomogeneous)
+
+```{r}
+lambda_pos <- density(ppp_bombus, sigma = bw.ppl, positive = TRUE)
+
+g_inhom <- envelope(ppp_bombus, pcfinhom,
+                    simulate = expression(rpoispp(lambda_pos)),
+                    nsim = 99)
+
+plot(g_inhom, 
+     main = "Pair Correlation Function (Inhomogeneous)", 
+     legendargs = list(cex = 0.7), 
+     legendpos = "topright")
+```
+
+Even after intensity adjustment, g(r) still exceeds 1 at short distances, reinforcing evidence of second-order clustering driven by ecological processes.
+
+#### Correlation Section Summary:
+
+Second-order analysis strongly confirms clustering in Bombus locations, especially at short distances (\<30km). The clustering persists even after controlling for spatial intensity, suggesting ecological drivers like limited dispersal or habitat structure.
+
+#### Overall Summary:
+
+Our spatial analysis of Bombus (bumble bee) occurrences in British Columbia demonstrates that their distribution is highly non-uniform. First-order analysis reveals strong spatial heterogeneity, with preferred conditions including southern locations, mid-elevation zones (500–1500m), and moderate forest cover (40–60%).
+
+Second-order tools like Ripley’s K-function and pair correlation further confirm short-range clustering, even after controlling for intensity. This implies that factors beyond covariate-driven intensity (e.g., dispersal limits or nesting behavior) influence Bombus spatial patterns.
+
+Together, these results highlight the importance of modeling both first-order (intensity) and second-order (correlation) properties to understand species distribution accurately and to inform ecological modeling and conservation efforts.
