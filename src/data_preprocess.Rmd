@@ -188,6 +188,10 @@ ppp_bombus <- ppp_bombus[!duplicated(ppp_bombus), ]
 
 There are `r (dim(bombus_bc_projected)[1] - ppp_bombus$n)` duplicated points. Now, there are `r ppp_bombus$n` unique bomble bee datapoints left in BC province.
 
+```{r}
+plot(unmark(ppp_bombus), main = "Bumble Bee Occurrences in BC")
+```
+
 ### Plot Specific Epithet vs. Bumble Bee Occurrences
 ```{r}
 # Extract levels and number of classes
@@ -204,7 +208,7 @@ shape_values <- rep(all_shapes, length.out = n_classes)
 # Plot
 plot(ppp_bombus,
      which.marks = "specificEpithet",
-     main        = "Point Pattern of Specific Epithet and Bumble Bee Occurrences",
+     main        = "Specific Epithet of Bumble Bee in BC",
      cols         = colors,
      pch         = shape_values,
      cex         = 0.8,
@@ -223,7 +227,7 @@ legend(
 ```
 
 ### Add marks
-Add `Distance`, `Dist Water`, `Elevation`, `Forest`, and `HFI` for marks.
+Add `Distance`, `Dist Water` for marks.
 
 ```{r}
 length_max <- length(dist)
@@ -234,47 +238,72 @@ dist <- nndist(ppp_bombus)
 # Dist Water -- 984 data points, no missing records.
 dist_water <- data_covariates$Dist_Water[ppp_bombus]
 
-# Elevation -- 982 data points, 2 missing records, replace with NA.
-elev <- data_covariates$Elevation[ppp_bombus]
-length(elev) <- length_max
-
-# Forest -- 963 data points, 19 missing points, replace with NA.
-forest <- data_covariates$Forest[ppp_bombus]
-length(forest) <- length_max
-
-# HFI -- 950 data points, 34 missing points, replace with NA.
-hfi_bombus <- data_covariates$HFI[ppp_bombus]
-length(hfi_bombus) <- length_max
-
 # Add marks.
 marks(ppp_bombus)$Dist <- dist
 marks(ppp_bombus)$DistWater <- dist_water
-marks(ppp_bombus)$Elevation <- elev
-marks(ppp_bombus)$Forest <- forest
-marks(ppp_bombus)$HFI <- hfi_bombus
 
 head(marks(ppp_bombus))
 ```
 Plot
 ```{r}
-# Plot distance mark.
-plot(ppp_bombus, which.marks = "Dist", main = "Bomble Bee Distance")
+# Plot Distance
+plot(ppp_bombus, which.marks = "Dist", main = "Bumble Bee Distance")
 
-# Plot dist water
-plot(ppp_bombus, which.marks = "DistWater", main = "Dist Water")
+# Plot Elevation.
+plot(data_covariates$Elevation, main = "Elevation")
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.6,
+     col = "black"
+     );par(new=TRUE)
 
-# Plot elevation
-ppp_bombus_elev_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$Elevation))
-marks(ppp_bombus_elev_clean)$ElevationCut <- cut(marks(ppp_bombus_elev_clean)$Elevation, breaks = 4)
-plot(ppp_bombus_elev_clean, which.marks = "ElevationCut", main = "Elevation")
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.5,
+     col = "yellow"
+     )
 
-# Plot Forest
-ppp_bombus_forest_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$Forest))
-plot(ppp_bombus_forest_clean, which.marks = "Forest", main = "Forest")
+# Plot Forest.
+plot(data_covariates$Forest, main = "Forest")
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.6,
+     col = "yellow"
+     );par(new=TRUE)
+
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.5,
+     col = "black"
+     )
 
 # Plot HFI
-ppp_bombus_hfi_clean <- subset(ppp_bombus, !is.na(marks(ppp_bombus)$HFI))
-plot(ppp_bombus_hfi_clean, which.marks = "HFI", main = "HFI")
+plot(data_covariates$HFI, main = "HFI")
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.6,
+     col = "black"
+     );par(new=TRUE)
+
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.5,
+     col = "yellow"
+     )
+
+# Plot Dist_water
+plot(data_covariates$Dist_Water, main = "Dist Water")
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.6,
+     col = "black"
+     );par(new=TRUE)
+
+points(ppp_bombus$x, ppp_bombus$y,
+     pch = 16,
+     cex = 0.5,
+     col = "yellow"
+     )
 ```
 
 ## Park
@@ -282,7 +311,7 @@ Plot Park vs. Bumble bee occurrences.
 ```{r}
 # Plot the point pattern & assign to variable for specific information
 ppp_parks_plot <- plot(ppp_parks,
-                       main = "Point Pattern of Parks and Bumble Bee Occurrences", 
+                       main = "Parks VS. Bumble Bee Occurrences", 
                        col = "grey90", 
                        cols = brewer.pal(n = 5, name = "Set2"), 
                        pch = c(15, 19, 18, 17, 20), 
