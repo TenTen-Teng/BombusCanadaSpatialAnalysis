@@ -102,7 +102,7 @@ rho_elev <- rhohat(unmark(ppp_bombus), data_covariates$Elevation)
 plot(rho_elev, main = "ρ̂(Elevation)")
 ```
 
-Intensity increases up to around 1200m, then slightly declines. This unimodal trend suggests a preference for mid-elevation zones.
+The estimated intensity appears highest at low elevations, but that spike is likely not meaningful — possibly due to edge effects or sparse data near the boundaries.
 
 #### Covariate Relationship – Forest Cover
 
@@ -112,7 +112,7 @@ rho_forest <- rhohat(ppp_unmarked, data_covariates$Forest)
 plot(rho_forest, main = "ρ̂(Forest Cover)")
 ```
 
-Bombus intensity is highest in areas with \~40–60% forest cover, revealing a nonlinear association where moderate forest density is preferred.
+For forest cover, intensity peaks between 10% and 35%, suggesting Bombus prefer areas with low to moderate vegetation — likely open habitats or meadow edges.
 
 #### Elevation Binning + Histogram Overlay
 
@@ -145,11 +145,11 @@ hist(elev_bombus, col = rgb(1, 0, 0, 0.4), breaks = common_breaks,
      main = "Elevation Distribution (Bombus Locations)", xlab = "Elevation (m)")
 ```
 
-To assess elevation preferences, we first overlaid histograms. However, due to scale mismatch, separate histograms using common breaks were plotted. These show Bombus prefer 500–1500m elevation, unlike the full window which peaks higher.
+To assess elevation preferences, we first overlaid histograms. However, due to scale mismatch, separate histograms using common breaks were plotted. The elevation histogram helps clarify: most of the region lies at mid-elevation, but Bombus tend to occur more frequently at lower elevations.
 
 #### Intensity Section Summary:
 
-Bombus distribution across BC is not uniform. The point pattern shows clear southern clustering, with preferences for mid-elevation and moderate forest cover. These findings reject the assumption of CSR and justify intensity-based modeling using covariates.
+Bombus distribution across BC is not uniform. The point pattern shows clear southern clustering, with preferences for low to mid elevations and moderate forest cover. These findings reject the assumption of CSR and justify intensity-based modeling using covariates.
 
 ### II. Spatial Correlations (Second-order Properties)
 
@@ -184,7 +184,7 @@ K_inhom <- envelope(ppp_bombus, Kinhom,
 plot(K_inhom, main = "Inhomogeneous Ripley’s K-function", legendargs = list(cex = 0.7))
 ```
 
-Even after accounting for intensity variations, the Kinhom function exceeds expectation, confirming clustering that cannot be explained by first-order intensity alone.
+In the K-function plot, the observed line mostly stays within the confidence band and closely follows the theoretical expectation, with only minor deviations. This suggests weak residual clustering after adjusting for intensity.
 
 #### Pair Correlation Function (Homogeneous)
 
@@ -222,18 +222,24 @@ plot(g_inhom,
      main = "Pair Correlation Function (Inhomogeneous)", 
      legendargs = list(cex = 0.7), 
      legendpos = "topright")
+
+plot(g_inhom, 
+     main = "Zoomed-in: Pair Correlation Function (Inhomogeneous)", 
+     ylim = c(0, 20),
+     legendargs = list(cex = 0.7), 
+     legendpos = "topright")
 ```
 
-Even after intensity adjustment, g(r) still exceeds 1 at short distances, reinforcing evidence of second-order clustering driven by ecological processes.
+The pair correlation function, shown here in a zoomed-in view, reveals a similar trend — values remain close to the expected level across most distances, indicating no substantial short- or long-range clustering.
 
 #### Correlation Section Summary:
 
-Second-order analysis strongly confirms clustering in Bombus locations, especially at short distances (\<30km). The clustering persists even after controlling for spatial intensity, suggesting ecological drivers like limited dispersal or habitat structure.
+Second-order analysis using inhomogeneous Ripley’s K and pair correlation functions shows that Bombus are clustered in southern BC, especially in low to mid elevations and moderately forested areas. However, most of this clustering appears to be explained by environmental covariates like elevation and forest cover, with only limited residual spatial dependence beyond those factors.
 
 #### Overall Summary:
 
-Our spatial analysis of Bombus (bumble bee) occurrences in British Columbia demonstrates that their distribution is highly non-uniform. First-order analysis reveals strong spatial heterogeneity, with preferred conditions including southern locations, mid-elevation zones (500–1500m), and moderate forest cover (40–60%).
+Our spatial analysis of Bombus distribution in BC reveals clear clustering in southern regions, particularly in low to mid elevations and moderately forested areas.
 
-Second-order tools like Ripley’s K-function and pair correlation further confirm short-range clustering, even after controlling for intensity. This implies that factors beyond covariate-driven intensity (e.g., dispersal limits or nesting behavior) influence Bombus spatial patterns.
+First-order and second-order analyses together suggest that most spatial variation is shaped by environmental covariates, with only minimal clustering beyond what those covariates explain.
 
-Together, these results highlight the importance of modeling both first-order (intensity) and second-order (correlation) properties to understand species distribution accurately and to inform ecological modeling and conservation efforts.
+These findings highlight how ecological factors like elevation and forest cover shape Bombus habitats — and support covariate-based modeling for future ecological or conservation efforts.
